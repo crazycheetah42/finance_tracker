@@ -9,6 +9,21 @@
 #define STB_IMAGE_IMPLEMENTATION // Tells the header to create the actual loading logic
 #include "stb_image.h"           // Allows us to read PNG/JPG files into raw pixels
 
+
+// A helper function that encrypts or decrypts a string using a secret key
+std::string encryptDecrypt(std::string data) {
+    char key = 'K'; // This is your secret key character! You can change this to any letter/symbol.
+    std::string output = data;
+    
+    // Loop through every single character in the sentence
+    for (size_t i = 0; i < data.size(); i++) {
+        // The ^ symbol is the bitwise XOR operator in C++
+        output[i] = data[i] ^ key;
+    }
+    
+    return output;
+}
+
 int main() {
     if (!glfwInit()) return -1; // This initializes the library. If it fails (returns false / 0), we stop the program immediately by returning -1.
 
@@ -101,20 +116,25 @@ int main() {
 
         // Dynamically changes the text on our action button depending on if the user selected income or expense
         std::string buttonText = isIncome ? "Add Income" : "Add Expense";
-        if (ImGui::Button(buttonText.c_str())) { // Button for adding (.c_str() converts C++ string to C-style string for ImGui)
+        if (ImGui::Button(buttonText.c_str())) { 
             std::ofstream outputFile("expenses.txt", std::ios::app);
             if (outputFile.is_open()) {
-                // Math trick: If it's an expense, make the number negative before saving so it naturally subtracts from balance later
                 float finalAmount = isIncome ? amount : -amount;
 
-                // Write the description, comma, amount, then a new line
-                outputFile << description << ", " << finalAmount << "\n";
-                outputFile.close(); // Close the file since we no longer need it for now
-                
-                std::cout << "Successfully saved: " << description << " ($" << finalAmount << ")" << std::endl;
+                // 1. Create a normal string line just like before
+                std::string plainTextLine = std::string(description) + "," + std::to_string(finalAmount);
 
-                description[0] = '\0'; // Clears text box using the single quote null-terminator character
-                amount = 0.0f; // Resets input amount box back to zero
+                // 2. Scramble the line using our encryption function
+                std::string encryptedLine = encryptDecrypt(plainTextLine);
+
+                // 3. Write the gibberish line into your text file
+                outputFile << encryptedLine << "\n";
+                outputFile.close(); 
+                
+                std::cout << "Successfully encrypted and saved!" << std::endl;
+
+                description[0] = '\0'; 
+                amount = 0.0f; 
             }
         }
 
@@ -132,16 +152,16 @@ int main() {
         // FIRST PASS: Let's calculate the total balance
         if (inputFile.is_open()) {
             while (std::getline(inputFile, line)) {
-                // Find where the comma is in the line
+                
+                // 🔐 DECRYPT HERE FIRST: Turn gibberish back into readable text
+                line = encryptDecrypt(line);
+
                 size_t commaPos = line.find(',');
                 if (commaPos != std::string::npos) {
-                    // Extract the string number right after the comma
                     std::string amountStr = line.substr(commaPos + 1);
-                    // std::stof converts a string into a float number
                     totalBalance += std::stof(amountStr);
                 }
             }
-            // Clear file flags and rewind back to the beginning of the file so we can read it again for the history list
             inputFile.clear();
             inputFile.seekg(0);
         }
@@ -153,30 +173,27 @@ int main() {
         
         if (ImGui::BeginChild("ScrollingHistoryRegion", ImVec2(0, 0), true)) {
             if (inputFile.is_open()) {
-                // Read the file line by line again
                 while (std::getline(inputFile, line)) {
+                    
+                    // 🔐 DECRYPT HERE SECOND: Turn gibberish back into readable text
+                    line = encryptDecrypt(line);
+
                     size_t commaPos = line.find(',');
                     if (commaPos != std::string::npos) {
-                        // Separate the text description and the number string
                         std::string descStr = line.substr(0, commaPos);
                         std::string amountStr = line.substr(commaPos + 1);
                         float val = std::stof(amountStr);
 
-                        // If the value is negative, format it nicely as an expense, otherwise as income
                         if (val < 0.0f) {
-                            // ImGui::TextColored lets you pick a custom RGBA color. Let's make expenses Red!
                             ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s: -$%.2f", descStr.c_str(), -val);
                         } else {
-                            // Let's make income Green!
                             ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), "%s: +$%.2f", descStr.c_str(), val);
                         }
                     }
                 }
-                inputFile.close(); // Safely close the file reader loop
-            } else {
-                ImGui::Text("No transactions recorded yet.");
+                inputFile.close();
             }
-            ImGui::EndChild(); // Must always close a BeginChild box!
+            ImGui::EndChild();
         }
 
         ImGui::Columns(1); // Safely resets the columns back to 1 before wrapping up the window code
